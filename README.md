@@ -26,7 +26,7 @@ start the websocket server:
 docker compose up server
 ```
 
-launch a chat client (runs in an interactive tty (ghostty):
+launch a chat client runs in an interactive tty (ghostty):
 
 ```
 docker compose run --rm client
