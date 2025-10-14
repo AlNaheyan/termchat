@@ -1,17 +1,26 @@
 # termchat
-simple bi-directional chatting platform right at your terminal built with go and bubbletea.
-
+Lightweight terminal-based chat that lets users create or join private rooms and talk in real time from the command line. A Bubble Tea TUI handles navigation, name/room prompts, and the live message log; the server keeps room state in memory and broadcasts messages to all connected clients.
 tui built with lipgloss
 
 *ref: [go/lipgloss](https://github.com/charmbracelet/lipgloss)*
 
 ## setup
-run the tui against a locally running server using go directly:
+WIP: Binary 
 
-```
-go run ./cmd/server &
-go run ./cmd/client
-```
+1. Clone or download the repo:
+    ```
+    git clone https://github.com/alnaheyan/termchat.git
+    cd termchat
+    ```
+2. Pull dependencies:
+    ```
+    go mod download
+    ```
+3. Join or create a chat room
+    ```
+    go run ./cmd/client --server wss://termchat-server-al.fly.dev/join
+    ```
+4. Enjoy chatting either sharing the code if creating or joining with the shared code. 
 
 ## docker
 build and run everything through docker compose:
