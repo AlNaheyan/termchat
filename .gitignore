@@ -1,2 +1,7 @@
+# Environment variables
 .env
-plan.md
+.env.*
+
+# IDE
+.vscode/
+.DS_Store
