@@ -28,7 +28,6 @@ func newRoom(key string) *Room {
 	}
 }
 
-
 func (room *Room) size() int {
 	room.mutex.RLock()
 	defer room.mutex.RUnlock()
@@ -66,20 +65,30 @@ func (room *Room) run() {
 	}
 }
 
-
 type Client struct {
-	room *Room
-	conn *websocket.Conn
-	send chan []byte
+	room         *Room
+	conn         *websocket.Conn
+	send         chan []byte
+	messageTimes []time.Time
 }
 
 const (
-	writeWait  = 10 * time.Second
-	pongWait   = 60 * time.Second
-	pingPeriod = (pongWait * 9) / 10
-	maxMsgSize = 8192
+	writeWait       = 10 * time.Second
+	pongWait        = 60 * time.Second
+	pingPeriod      = (pongWait * 9) / 10
+	maxMsgSize      = 8192
+	rateLimitWindow = 3 * time.Second
+	rateLimitBurst  = 5
 )
 
+func newClient(room *Room, conn *websocket.Conn) *Client {
+	return &Client{
+		room:         room,
+		conn:         conn,
+		send:         make(chan []byte, 256),
+		messageTimes: make([]time.Time, 0, rateLimitBurst),
+	}
+}
 
 func (client *Client) readPump(hub *Hub, roomKey string) {
 	defer func() {
@@ -99,9 +108,14 @@ func (client *Client) readPump(hub *Hub, roomKey string) {
 			break
 		}
 		var chatMessage ChatMessage
+		now := time.Now()
 		if err := json.Unmarshal(payload, &chatMessage); err == nil {
+			if !client.allowMessage(now) {
+				client.notifyRateLimit(now)
+				continue
+			}
 			if chatMessage.Ts == 0 {
-				chatMessage.Ts = time.Now().Unix()
+				chatMessage.Ts = now.Unix()
 			}
 			if chatMessage.Room == "" {
 				chatMessage.Room = roomKey
@@ -109,11 +123,14 @@ func (client *Client) readPump(hub *Hub, roomKey string) {
 			encoded, _ := json.Marshal(chatMessage)
 			client.room.broadcast <- encoded
 		} else {
+			if !client.allowMessage(now) {
+				client.notifyRateLimit(now)
+				continue
+			}
 			client.room.broadcast <- payload
 		}
 	}
 }
-
 
 func (client *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
@@ -138,5 +155,41 @@ func (client *Client) writePump() {
 				return
 			}
 		}
+	}
+}
+
+// rate limits
+
+func (client *Client) allowMessage(now time.Time) bool {
+	cutoff := now.Add(-rateLimitWindow)
+	idx := 0
+	for _, ts := range client.messageTimes {
+		if ts.After(cutoff) {
+			client.messageTimes[idx] = ts
+			idx++
+		}
+	}
+	client.messageTimes = client.messageTimes[:idx]
+	if len(client.messageTimes) >= rateLimitBurst {
+		return false
+	}
+	client.messageTimes = append(client.messageTimes, now)
+	return true
+}
+
+func (client *Client) notifyRateLimit(now time.Time) {
+	message := ChatMessage{
+		Room: client.room.key,
+		User: "system",
+		Body: "You're sending messages too quickly. Please wait a moment and try again.",
+		Ts:   now.Unix(),
+	}
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return
+	}
+	select {
+	case client.send <- payload:
+	default:
 	}
 }

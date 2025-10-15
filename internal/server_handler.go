@@ -7,7 +7,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -15,7 +14,6 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
-
 
 func ServeWS(hub *Hub, writer http.ResponseWriter, request *http.Request) {
 	roomKey := request.URL.Query().Get("room")
@@ -30,7 +28,7 @@ func ServeWS(hub *Hub, writer http.ResponseWriter, request *http.Request) {
 	}
 
 	room := hub.getOrCreateRoom(roomKey)
-	client := &Client{room: room, conn: websocketConn, send: make(chan []byte, 256)}
+	client := newClient(room, websocketConn)
 	room.register <- client
 
 	go client.writePump()
