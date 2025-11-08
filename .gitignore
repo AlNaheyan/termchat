@@ -5,3 +5,11 @@
 # IDE
 .vscode/
 .DS_Store
+
+# Go build cache override
+.gocache/
+
+# local sqlite db
+termchat.db
+
+data/

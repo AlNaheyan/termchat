@@ -70,6 +70,9 @@ type Client struct {
 	conn         *websocket.Conn
 	send         chan []byte
 	messageTimes []time.Time
+	username     string
+	userID       int64
+	onDisconnect func()
 }
 
 const (
@@ -81,12 +84,15 @@ const (
 	rateLimitBurst  = 5
 )
 
-func newClient(room *Room, conn *websocket.Conn) *Client {
+func newClient(room *Room, conn *websocket.Conn, username string, userID int64, onDisconnect func()) *Client {
 	return &Client{
 		room:         room,
 		conn:         conn,
 		send:         make(chan []byte, 256),
 		messageTimes: make([]time.Time, 0, rateLimitBurst),
+		username:     username,
+		userID:       userID,
+		onDisconnect: onDisconnect,
 	}
 }
 
@@ -95,6 +101,9 @@ func (client *Client) readPump(hub *Hub, roomKey string) {
 		client.room.unregister <- client
 		client.conn.Close()
 		hub.deleteRoomIfEmpty(roomKey)
+		if client.onDisconnect != nil {
+			client.onDisconnect()
+		}
 	}()
 	client.conn.SetReadLimit(maxMsgSize)
 	_ = client.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -120,6 +129,7 @@ func (client *Client) readPump(hub *Hub, roomKey string) {
 			if chatMessage.Room == "" {
 				chatMessage.Room = roomKey
 			}
+			chatMessage.User = client.username
 			encoded, _ := json.Marshal(chatMessage)
 			client.room.broadcast <- encoded
 		} else {

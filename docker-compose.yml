@@ -6,9 +6,12 @@ services:
       target: server
     ports:
       - "8080:8080"
+    volumes:
+      - ./data:/data
     environment:
       TERMCHAT_ADDR: ":8080"
       TERMCHAT_PATH: "/join"
+      TERMCHAT_DB_PATH: "/data/termchat.db"
 
   client:
     build:

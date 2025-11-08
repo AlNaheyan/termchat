@@ -1,49 +1,62 @@
 package main
 
 import (
-    "flag"
-    "log"
-    "net/http"
-    "os"
+	"context"
+	"flag"
+	"log"
+	"net/http"
+	"os"
+	"strings"
 
-    intrnl "termchat/internal"
+	intrnl "termchat/internal"
+	"termchat/internal/storage"
 )
 
 func main() {
-    addr := flag.String("addr", getEnv("TERMCHAT_ADDR", ":8080"), "server listen address")
-    path := flag.String("path", getEnv("TERMCHAT_PATH", "/join"), "websocket join path")
-    flag.Parse()
+	addr := flag.String("addr", getEnv("TERMCHAT_ADDR", ":8080"), "server listen address")
+	path := flag.String("path", getEnv("TERMCHAT_PATH", "/join"), "websocket join path")
+	dbPath := flag.String("db", getEnv("TERMCHAT_DB_PATH", "termchat.db"), "sqlite database path")
+	flag.Parse()
 
-    hub := intrnl.NewHub()
+	store, err := storage.NewStore(*dbPath)
+	if err != nil {
+		log.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+	if err := store.Migrate(context.Background()); err != nil {
+		log.Fatalf("migrate: %v", err)
+	}
 
-    http.HandleFunc(*path, func(writer http.ResponseWriter, request *http.Request) {
-        intrnl.ServeWS(hub, writer, request)
-    })
+	server := intrnl.NewServer(store)
+	mux := http.NewServeMux()
+	mux.HandleFunc(*path, server.ServeWS)
+	mux.HandleFunc("/signup", server.HandleSignup)
+	mux.HandleFunc("/login", server.HandleLogin)
+	mux.HandleFunc("/logout", server.HandleLogout)
+	mux.HandleFunc("/friends", server.HandleFriends)
+	mux.HandleFunc("/friends/", server.HandleAddFriend)
+	mux.HandleFunc("/friend-requests", server.HandleFriendRequests)
+	mux.HandleFunc("/friend-requests/", func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.TrimPrefix(r.URL.Path, "/friend-requests/")
+		if strings.Contains(trimmed, "/") {
+			server.HandleRespondFriendRequest(w, r)
+			return
+		}
+		server.HandleCreateFriendRequest(w, r)
+	})
+	mux.HandleFunc("/password/change", server.HandlePasswordChange)
+	mux.HandleFunc("/exists", server.HandleRoomExists)
+	mux.Handle("/metrics", server.MetricsHandler())
 
-    // simple HTTP endpoint to check for room existence without creating it
-    http.HandleFunc("/exists", func(w http.ResponseWriter, r *http.Request) {
-        room := r.URL.Query().Get("room")
-        if room == "" {
-            http.Error(w, "missing room", http.StatusBadRequest)
-            return
-        }
-        if hub.Exists(room) {
-            w.WriteHeader(http.StatusOK)
-            _, _ = w.Write([]byte("ok"))
-            return
-        }
-        http.Error(w, "not found", http.StatusNotFound)
-    })
-
-    log.Printf("TermChat server listening on %s%s", *addr, *path)
-    if err := http.ListenAndServe(*addr, nil); err != nil {
-        log.Fatalf("server error: %v", err)
-    }
+	log.Printf("TermChat server listening on %s (ws path %s)", *addr, *path)
+	if err := http.ListenAndServe(*addr, mux); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
 }
 
 func getEnv(key, def string) string {
-    if v := os.Getenv(key); v != "" {
-        return v
-    }
-    return def
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

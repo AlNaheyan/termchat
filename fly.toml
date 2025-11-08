@@ -5,9 +5,14 @@ primary_region = "ewr"
   dockerfile = "Dockerfile"
   target = "server"
 
+[[mounts]]
+  source = "termchat_data"
+  destination = "/data"
+
 [env]
   TERMCHAT_ADDR = ":8080"
   TERMCHAT_PATH = "/join"
+  TERMCHAT_DB_PATH = "/data/termchat.db"
 
 [http_service]
   internal_port = 8080

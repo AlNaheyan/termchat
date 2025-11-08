@@ -2,7 +2,9 @@ package internal
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,23 +16,40 @@ type TUIModel struct {
 	textInput       textinput.Model
 	messages        []ChatMessage
 	serverJoinURL   string
+	apiBaseURL      string
+	sessionPath     string
 	roomKey         string
 	username        string
+	currentFriend   string
+	sessionToken    string
+	friends         []Friend
+	incomingReqs    []string
+	outgoingReqs    []string
+	selectedFriend  int
+	selectedRequest int
+	requestView     requestViewType
+	pendingUsername string
+	authIntent      authIntent
 	websocketConn   *websocket.Conn
 	writeMutex      sync.Mutex
 	isConnected     bool
 	connectionError error
 	mode            appMode
 	pendingAction   actionType
-	menuIndex       int
+	loading         bool
 }
 
 type appMode int
 
 const (
-	modeMenu appMode = iota
-	modeNamePrompt
-	modeJoinPrompt
+	modeAuthMenu appMode = iota
+	modeAuthUsername
+	modeAuthPassword
+	modeFriends
+	modeAddFriend
+	modeManualRoom
+	modeRequestsIncoming
+	modeRequestsOutgoing
 	modeChat
 )
 
@@ -42,6 +61,24 @@ const (
 	actionCreate
 )
 
+type authIntent int
+
+const (
+	authIntentLogin authIntent = iota
+	authIntentSignup
+)
+
+type requestViewType int
+
+const (
+	requestViewIncoming requestViewType = iota
+	requestViewOutgoing
+)
+
+type Friend struct {
+	Username string
+	Online   bool
+}
 
 func NewTUIModel(serverJoinURL, roomKey, username string) *TUIModel {
 	input := textinput.New()
@@ -54,20 +91,39 @@ func NewTUIModel(serverJoinURL, roomKey, username string) *TUIModel {
 		username = defaultUsername()
 	}
 
+	apiBase, err := httpBaseFromJoinURL(serverJoinURL)
+	if err != nil {
+		apiBase = ""
+	}
+
 	model := &TUIModel{
 		textInput:     input,
 		messages:      make([]ChatMessage, 0, 64),
 		serverJoinURL: serverJoinURL,
+		apiBaseURL:    apiBase,
+		sessionPath:   defaultSessionPath(),
 		roomKey:       roomKey,
 		username:      username,
 	}
-	if roomKey == "" {
-		model.mode = modeMenu
+
+	if session, err := loadSessionFromDisk(model.sessionPath); err == nil {
+		model.sessionToken = session.Token
+		model.username = session.Username
+	}
+
+	switch {
+	case roomKey != "" && model.sessionToken != "":
+		model.mode = modeChat
+	case model.sessionToken != "":
+		model.mode = modeFriends
 		model.textInput.Blur()
 		model.textInput.Prompt = ""
 		model.textInput.Placeholder = ""
-	} else {
-		model.mode = modeChat
+	default:
+		model.mode = modeAuthMenu
+		model.textInput.Blur()
+		model.textInput.Prompt = ""
+		model.textInput.Placeholder = ""
 	}
 	return model
 }
@@ -84,8 +140,44 @@ func defaultUsername() string {
 }
 
 func (model *TUIModel) Init() tea.Cmd {
-	if model.mode == modeChat {
+	switch model.mode {
+	case modeChat:
 		return model.connectCmd()
+	case modeFriends:
+		return tea.Batch(model.fetchFriendsCmd(), model.fetchFriendRequestsCmd())
+	default:
+		return nil
 	}
-	return nil
+}
+
+func defaultSessionPath() string {
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".termchat", "session.json")
+	}
+	return filepath.Join(".termchat", "session.json")
+}
+
+func (model *TUIModel) appendSystemNotice(body string) {
+	model.messages = append(model.messages, ChatMessage{User: "system", Body: body, Ts: time.Now().Unix()})
+}
+
+func (model *TUIModel) resetChatLog() {
+	filtered := model.messages[:0]
+	for _, msg := range model.messages {
+		if msg.Room == "" {
+			filtered = append(filtered, msg)
+		}
+	}
+	model.messages = filtered
+}
+
+func (model *TUIModel) persistSession() error {
+	if model.sessionPath == "" {
+		return nil
+	}
+	return saveSessionToDisk(model.sessionPath, sessionFile{Username: model.username, Token: model.sessionToken})
+}
+
+func (model *TUIModel) removeSessionFile() error {
+	return deleteSessionFile(model.sessionPath)
 }

@@ -29,7 +29,11 @@ func (model *TUIModel) connectCmd() tea.Cmd {
 		if err != nil {
 			return connectFailedMsg{err: err}
 		}
-		conn, _, err := websocket.DefaultDialer.Dial(joinURL, http.Header{})
+		headers := http.Header{}
+		if model.sessionToken != "" {
+			headers.Set("Authorization", "Bearer "+model.sessionToken)
+		}
+		conn, _, err := websocket.DefaultDialer.Dial(joinURL, headers)
 		if err != nil {
 			return connectFailedMsg{err: err}
 		}
@@ -98,13 +102,92 @@ func (model *TUIModel) sendCmd(chat ChatMessage) tea.Cmd {
 	}
 }
 
-//entry for bubbletea
+// entry for bubbletea
 func RunClient(serverJoinURL, roomKey, username string) error {
 	program := tea.NewProgram(NewTUIModel(serverJoinURL, roomKey, username))
 	_, err := program.Run()
 	return err
 }
 
+func (model *TUIModel) submitCredentialsCmd(username, password string) tea.Cmd {
+	intent := model.authIntent
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" {
+			return authResultMsg{err: fmt.Errorf("invalid server URL")}
+		}
+		if intent == authIntentSignup {
+			if err := apiSignup(base, username, password); err != nil {
+				return authResultMsg{err: err}
+			}
+		}
+		resp, err := apiLogin(base, username, password)
+		if err != nil {
+			return authResultMsg{err: err}
+		}
+		return authResultMsg{token: resp.Token, username: resp.Username}
+	}
+}
+
+func (model *TUIModel) fetchFriendsCmd() tea.Cmd {
+	token := model.sessionToken
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" || token == "" {
+			return friendsLoadedMsg{err: fmt.Errorf("missing session")}
+		}
+		friends, err := apiGetFriends(base, token)
+		return friendsLoadedMsg{friends: friends, err: err}
+	}
+}
+
+func (model *TUIModel) sendFriendRequestCmd(friendUsername string) tea.Cmd {
+	token := model.sessionToken
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" || token == "" {
+			return friendRequestActionMsg{username: friendUsername, err: fmt.Errorf("missing session")}
+		}
+		err := apiSendFriendRequest(base, token, friendUsername)
+		return friendRequestActionMsg{username: friendUsername, action: "sent", err: err}
+	}
+}
+
+func (model *TUIModel) logoutCmd() tea.Cmd {
+	token := model.sessionToken
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" || token == "" {
+			return logoutResultMsg{err: nil}
+		}
+		err := apiLogout(base, token)
+		return logoutResultMsg{err: err}
+	}
+}
+
+func (model *TUIModel) fetchFriendRequestsCmd() tea.Cmd {
+	token := model.sessionToken
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" || token == "" {
+			return friendRequestsLoadedMsg{err: fmt.Errorf("missing session")}
+		}
+		resp, err := apiGetFriendRequests(base, token)
+		return friendRequestsLoadedMsg{incoming: resp.Incoming, outgoing: resp.Outgoing, err: err}
+	}
+}
+
+func (model *TUIModel) friendRequestActionCmd(username, action string) tea.Cmd {
+	token := model.sessionToken
+	base := model.apiBaseURL
+	return func() tea.Msg {
+		if base == "" || token == "" {
+			return friendRequestActionMsg{username: username, action: action, err: fmt.Errorf("missing session")}
+		}
+		err := apiRespondFriendRequest(base, token, username, action)
+		return friendRequestActionMsg{username: username, action: action, err: err}
+	}
+}
 
 func buildJoinURL(base string, roomKey string) (string, error) {
 	parsed, err := url.Parse(base)
@@ -120,7 +203,7 @@ func buildJoinURL(base string, roomKey string) (string, error) {
 	return parsed.String(), nil
 }
 
-//quich exist check for a room with http://localhost:8080/exists?room=ROOM_ID
+// quich exist check for a room with http://localhost:8080/exists?room=ROOM_ID
 func buildExistsURL(wsBase string, roomKey string) (string, error) {
 	parsed, err := url.Parse(wsBase)
 	if err != nil {
@@ -161,7 +244,6 @@ func generateSecureKey(length int) string {
 	return enc
 }
 
-
 func inviteText(serverJoinURL, roomKey string) string {
 	var sb strings.Builder
 	sb.WriteString("Invite others with:\n  ")
@@ -176,4 +258,11 @@ func inviteText(serverJoinURL, roomKey string) string {
 		sb.WriteString(roomKey)
 	}
 	return sb.String()
+}
+
+func directRoomKey(a, b string) string {
+	if strings.Compare(a, b) < 0 {
+		return fmt.Sprintf("chat:%s:%s", a, b)
+	}
+	return fmt.Sprintf("chat:%s:%s", b, a)
 }
