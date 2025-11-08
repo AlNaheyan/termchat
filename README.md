@@ -19,11 +19,9 @@ Want a lightweight chat app right inside your terminal? Termchat is a Bubble Tea
    ```bash
    TERMCHAT_DB_PATH=termchat.db go run ./cmd/server
    ```
-3. Run the client; it defaults to the hosted backend but you can point it at your local server with `TERMCHAT_SERVER`:
+3. Run the client:
    ```bash
    go run ./cmd/client
-   # or
-   TERMCHAT_SERVER=ws://localhost:8080/join go run ./cmd/client
    ```
 4. Containerized? Use Docker Compose:
    ```bash
