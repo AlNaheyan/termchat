@@ -1,67 +1,34 @@
-# termchat
-Lightweight terminal-based chat that lets users create or join private rooms and talk in real time from the command line. A Bubble Tea TUI handles navigation, name/room prompts, and the live message log; the server keeps room state in memory and broadcasts messages to all connected clients.
+# Termchat
+Want a lightweight chat app right inside your terminal? Termchat is a Bubble Tea–powered TUI that connects to a Go backend, authenticates with SQLite, and lets you trade real-time messages without leaving the command line.
 
-*ref: [go/lipgloss](https://github.com/charmbracelet/lipgloss)*
+## Technology
+- **Go 1.24** for both server and client
+- **Bubble Tea + Bubbles + Lipgloss** for the terminal interface
+- **Gorilla WebSocket** for real-time chats
+- **SQLite (modernc driver)** for user accounts, sessions, and friend lists
+- **Fly.io / Docker** for deployment targets
 
-## Running the server
-
-1. Clone the repo and pull the modules:
+## Quick Setup
+1. Clone the repo and fetch deps:
    ```bash
    git clone https://github.com/alnaheyan/termchat.git
    cd termchat
    go mod download
    ```
-2. Start the HTTP/WebSocket server. The first run will create a SQLite database (defaults to `termchat.db`, override with `TERMCHAT_DB_PATH`):
+2. Run the server locally (stores data in `termchat.db` by default):
    ```bash
-   TERMCHAT_DB_PATH=termchat.db go run ./cmd/server \
-     --addr :8080 \
-     --path /join
+   TERMCHAT_DB_PATH=termchat.db go run ./cmd/server
    ```
-   Endpoints exposed:
-   - `POST /signup`, `POST /login`, `POST /logout`
-   - `GET /friends`, `POST /friends/{username}`
-   - `GET /exists?room=ROOM_CODE`
-   - `GET /join?room=ROOM_CODE` (upgraded to WebSocket)
-
-## Running the client
-
-1. Launch the TUI and point it at your server’s join endpoint:
+3. Run the client; it defaults to the hosted backend but you can point it at your local server with `TERMCHAT_SERVER`:
    ```bash
-   go run ./cmd/client --server ws://localhost:8080/join
+   go run ./cmd/client
+   # or
+   TERMCHAT_SERVER=ws://localhost:8080/join go run ./cmd/client
    ```
-2. First-time users can **Sign up** inside the TUI. Returning users pick **Log in**; credentials are cached at `~/.termchat/session.json` (0600 permissions) for convenience.
-3. After authentication the client loads your friends list:
-   - `↑/↓` highlight a friend and hit `Enter` to open a direct chat (room key `chat:<sorted usernames>`).
-   - `A` adds a friend by username; friendships are mutual.
-   - `M` joins a manual room by code; `N` creates a random shareable room while keeping chats ephemeral.
-   - `R` refreshes, `L` logs out (also clears the cached session), `Q` quits.
-4. Inside a chat:
-   - Type messages and press `Enter`.
-   - `Esc` returns to the friends list, `/quit` exits the client entirely.
+4. Containerized? Use Docker Compose:
+   ```bash
+   docker compose up server
+   docker compose run --rm client
+   ```
 
-## docker
-build and run everything through docker compose:
-
-```
-docker compose build server client
-```
-
-start the websocket server:
-
-```
-docker compose up server
-```
-
-launch a chat client runs in an interactive tty (ghostty):
-
-```
-docker compose run --rm client
-```
-
-## Tests
-
-Storage migrations and helpers are covered with unit tests. Run them (or the whole suite) with:
-
-```bash
-GOCACHE=$(pwd)/.gocache go test ./...
-```
+That’s it—launch the TUI, sign up, send a friend request, and start chatting directly from your terminal.
