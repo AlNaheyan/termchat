@@ -9,8 +9,15 @@
 # Go build cache override
 .gocache/
 
+# go builds
+termchat
+
 # local sqlite db
 termchat.db
 
+# db
 data/
+
 dist/
+
+

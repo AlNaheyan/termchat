@@ -104,7 +104,10 @@ func (model *TUIModel) sendCmd(chat ChatMessage) tea.Cmd {
 
 // entry for bubbletea
 func RunClient(serverJoinURL, roomKey, username string) error {
-	program := tea.NewProgram(NewTUIModel(serverJoinURL, roomKey, username))
+	program := tea.NewProgram(
+		NewTUIModel(serverJoinURL, roomKey, username),
+		tea.WithAltScreen(), // render on an isolated canvas so we don't leave scrollback noise
+	)
 	_, err := program.Run()
 	return err
 }
