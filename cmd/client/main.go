@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	intrnl "termchat/internal"
+	"termchat/internal/app"
 )
 
 func main() {
-	defaultServer := getenvDefault("TERMCHAT_SERVER", "wss://termchat-server-al.fly.dev/join")
-	defaultUser := getenvDefault("TERMCHAT_USER", "")
+	defaultServer := envOrDefault("TERMCHAT_SERVER", "wss://termchat-server-al.fly.dev/join")
+	defaultUser := envOrDefault("TERMCHAT_USER", "")
 
 	serverJoinURL := flag.String("server", defaultServer, "WebSocket join URL (e.g., ws://localhost:8080/join)")
 	username := flag.String("user", defaultUser, "default username for login prompts")
@@ -22,13 +22,19 @@ func main() {
 		roomKey = args[0]
 	}
 
-	if err := intrnl.RunClient(*serverJoinURL, roomKey, *username); err != nil {
+	cfg := app.ClientConfig{
+		ServerURL: *serverJoinURL,
+		RoomKey:   roomKey,
+		Username:  *username,
+	}
+
+	if err := app.RunClient(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func getenvDefault(key, fallback string) string {
+func envOrDefault(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}

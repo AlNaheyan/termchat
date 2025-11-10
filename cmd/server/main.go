@@ -4,59 +4,42 @@ import (
 	"context"
 	"flag"
 	"log"
-	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
 
-	intrnl "termchat/internal"
-	"termchat/internal/storage"
+	"termchat/internal/app"
 )
 
 func main() {
-	addr := flag.String("addr", getEnv("TERMCHAT_ADDR", ":8080"), "server listen address")
-	path := flag.String("path", getEnv("TERMCHAT_PATH", "/join"), "websocket join path")
-	dbPath := flag.String("db", getEnv("TERMCHAT_DB_PATH", "termchat.db"), "sqlite database path")
+	addr := flag.String("addr", envOrDefault("TERMCHAT_ADDR", ":8080"), "server listen address")
+	path := flag.String("path", envOrDefault("TERMCHAT_PATH", "/join"), "websocket join path")
+	dbPath := flag.String("db", envOrDefault("TERMCHAT_DB_PATH", app.DefaultDBPath()), "sqlite database path")
 	flag.Parse()
 
-	store, err := storage.NewStore(*dbPath)
+	serverCfg := app.ServerConfig{
+		Addr:   *addr,
+		Path:   app.NormalizeJoinPath(*path),
+		DBPath: *dbPath,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	handle, err := app.RunServer(ctx, serverCfg)
 	if err != nil {
-		log.Fatalf("open store: %v", err)
+		log.Fatalf("start server: %v", err)
 	}
-	defer store.Close()
-	if err := store.Migrate(context.Background()); err != nil {
-		log.Fatalf("migrate: %v", err)
-	}
+	log.Printf("TermChat server listening on %s (ws path %s)", handle.Addr(), serverCfg.Path)
 
-	server := intrnl.NewServer(store)
-	mux := http.NewServeMux()
-	mux.HandleFunc(*path, server.ServeWS)
-	mux.HandleFunc("/signup", server.HandleSignup)
-	mux.HandleFunc("/login", server.HandleLogin)
-	mux.HandleFunc("/logout", server.HandleLogout)
-	mux.HandleFunc("/friends", server.HandleFriends)
-	mux.HandleFunc("/friends/", server.HandleAddFriend)
-	mux.HandleFunc("/friend-requests", server.HandleFriendRequests)
-	mux.HandleFunc("/friend-requests/", func(w http.ResponseWriter, r *http.Request) {
-		trimmed := strings.TrimPrefix(r.URL.Path, "/friend-requests/")
-		if strings.Contains(trimmed, "/") {
-			server.HandleRespondFriendRequest(w, r)
-			return
-		}
-		server.HandleCreateFriendRequest(w, r)
-	})
-	mux.HandleFunc("/password/change", server.HandlePasswordChange)
-	mux.HandleFunc("/exists", server.HandleRoomExists)
-	mux.Handle("/metrics", server.MetricsHandler())
-
-	log.Printf("TermChat server listening on %s (ws path %s)", *addr, *path)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	if err := handle.Wait(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }
 
-func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
-	return def
+	return fallback
 }

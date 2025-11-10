@@ -435,9 +435,9 @@ func (model *TUIModel) handleChatKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		trimmed := strings.TrimSpace(model.textInput.Value())
 		if strings.HasPrefix(trimmed, "/") {
 			switch strings.ToLower(trimmed) {
-			case "/quit", "/exit":
-				model.closeConnection()
-				return model, tea.Quit
+			case "/leave":
+				model.leaveChat()
+				return model, nil
 			}
 			return model, nil
 		}
@@ -446,12 +446,7 @@ func (model *TUIModel) handleChatKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return model, model.sendCmd(chat)
 		}
 	case tea.KeyEsc:
-		model.closeConnection()
-		model.mode = modeFriends
-		model.roomKey = ""
-		model.currentFriend = ""
-		model.textInput.Blur()
-		model.textInput.SetValue("")
+		model.leaveChat()
 		return model, nil
 	}
 	var cmd tea.Cmd
@@ -504,6 +499,15 @@ func (model *TUIModel) clearSessionState() {
 	model.textInput.SetValue("")
 	_ = model.removeSessionFile()
 	model.closeConnection()
+}
+
+func (model *TUIModel) leaveChat() {
+	model.closeConnection()
+	model.mode = modeFriends
+	model.roomKey = ""
+	model.currentFriend = ""
+	model.textInput.Blur()
+	model.textInput.SetValue("")
 }
 
 func (model *TUIModel) closeConnection() {

@@ -223,7 +223,7 @@ func (model TUIModel) renderChatView() string {
 
 	messagesView := messageBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, messageLines...))
 	inputView := inputBoxStyle.Render(model.textInput.View())
-	footerHint := menuHintStyle.Render("Esc to return • /quit exits app")
+	footerHint := menuHintStyle.Render("Esc or /leave to return to menu")
 
 	sections := []string{header}
 	if statusLine != "" {
