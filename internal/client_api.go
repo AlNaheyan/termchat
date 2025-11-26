@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -204,4 +205,140 @@ func deleteSessionFile(path string) error {
 		return err
 	}
 	return nil
+}
+
+// apiUploadFile uploads a file to the server
+func apiUploadFile(baseURL, token, filePath, roomKey, username string, progressCallback func(float64)) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open file: %w", err)
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("stat file: %w", err)
+	}
+
+	// Create multipart writer
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+
+	// Write multipart form in goroutine
+	go func() {
+		defer pw.Close()
+		defer writer.Close()
+
+		// Add file field
+		part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+
+		// Copy with progress tracking
+		if progressCallback != nil {
+			tracker := &progressTracker{
+				reader:   file,
+				total:    stat.Size(),
+				callback: progressCallback,
+			}
+			if _, err := io.Copy(part, tracker); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
+		} else {
+			if _, err := io.Copy(part, file); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
+		}
+
+		// Add other fields
+		writer.WriteField("room_key", roomKey)
+		writer.WriteField("username", username)
+	}()
+
+	// Create request
+	req, err := http.NewRequest("POST", baseURL+"/api/upload", pr)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Send request
+	client := &http.Client{Timeout: 2 * time.Minute} // Longer timeout for uploads
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("upload request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("upload failed: %d %s", resp.StatusCode, readResponseError(resp.Body))
+	}
+
+	var result struct {
+		FileID string `json:"file_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+
+	return result.FileID, nil
+}
+
+// apiDownloadFile downloads a file from the server
+func apiDownloadFile(baseURL, token, fileID, roomKey, destPath string) error {
+	url := fmt.Sprintf("%s/api/files/%s?room=%s", baseURL, fileID, roomKey)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed: %d", resp.StatusCode)
+	}
+
+	// Create destination file
+	out, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("create file: %w", err)
+	}
+	defer out.Close()
+
+	// Copy to file
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		os.Remove(destPath) // Clean up on error
+		return fmt.Errorf("write file: %w", err)
+	}
+
+	return nil
+}
+
+// progressTracker wraps an io.Reader to track read progress
+type progressTracker struct {
+	reader   io.Reader
+	total    int64
+	read     int64
+	callback func(float64)
+}
+
+func (pt *progressTracker) Read(p []byte) (int, error) {
+	n, err := pt.reader.Read(p)
+	pt.read += int64(n)
+	if pt.callback != nil && pt.total > 0 {
+		progress := float64(pt.read) / float64(pt.total)
+		pt.callback(progress)
+	}
+	return n, err
 }

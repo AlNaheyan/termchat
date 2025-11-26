@@ -60,6 +60,19 @@ func RunServer(ctx context.Context, cfg ServerConfig) (*ServerHandle, error) {
 	}
 	cfg.Path = NormalizeJoinPath(cfg.Path)
 
+	// Set defaults for file upload config
+	if cfg.UploadDir == "" {
+		cfg.UploadDir = DefaultUploadDir()
+	}
+	if cfg.MaxFileSize == 0 {
+		cfg.MaxFileSize = 10 * 1024 * 1024 // 10MB default
+	}
+
+	// Ensure upload directory exists
+	if err := os.MkdirAll(cfg.UploadDir, 0755); err != nil {
+		return nil, fmt.Errorf("create upload directory: %w", err)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(cfg.DBPath), 0o700); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
@@ -73,7 +86,7 @@ func RunServer(ctx context.Context, cfg ServerConfig) (*ServerHandle, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	server := intrnl.NewServer(store)
+	server := intrnl.NewServerWithConfig(store, cfg.UploadDir, cfg.MaxFileSize)
 	mux := http.NewServeMux()
 	registerHandlers(mux, cfg.Path, server)
 
@@ -143,4 +156,8 @@ func registerHandlers(mux *http.ServeMux, wsPath string, server *intrnl.Server) 
 	mux.HandleFunc("/password/change", server.HandlePasswordChange)
 	mux.HandleFunc("/exists", server.HandleRoomExists)
 	mux.Handle("/metrics", server.MetricsHandler())
+
+	// File upload/download routes
+	mux.HandleFunc("/api/upload", server.HandleFileUpload)
+	mux.HandleFunc("/api/files/", server.HandleFileDownload)
 }

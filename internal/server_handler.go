@@ -23,12 +23,14 @@ var upgrader = websocket.Upgrader{
 
 // Server bundles the hub with the persistent store and exposes HTTP handlers.
 type Server struct {
-	store       *storage.Store
-	hub         *Hub
-	tokenTTL    time.Duration
-	presence    *PresenceTracker
-	metrics     *Metrics
-	authLimiter *RateLimiter
+	store         *storage.Store
+	hub           *Hub
+	tokenTTL      time.Duration
+	presence      *PresenceTracker
+	metrics       *Metrics
+	authLimiter   *RateLimiter
+	fileHandler   *FileUploadHandler
+	uploadBaseDir string
 }
 
 // AuthContext represents the authenticated user resolved from a session token.
@@ -40,13 +42,23 @@ type AuthContext struct {
 
 // NewServer wires the hub and store together.
 func NewServer(store *storage.Store) *Server {
+	return NewServerWithConfig(store, "/data/uploads", 10*1024*1024)
+}
+
+// NewServerWithConfig creates a server with file upload configuration
+func NewServerWithConfig(store *storage.Store, uploadDir string, maxFileSize int64) *Server {
+	hub := NewHub()
+	fileHandler := NewFileUploadHandler(hub, uploadDir, maxFileSize)
+
 	return &Server{
-		store:       store,
-		hub:         NewHub(),
-		tokenTTL:    30 * 24 * time.Hour,
-		presence:    NewPresenceTracker(),
-		metrics:     NewMetrics(),
-		authLimiter: NewRateLimiter(10, time.Minute),
+		store:         store,
+		hub:           hub,
+		tokenTTL:      30 * 24 * time.Hour,
+		presence:      NewPresenceTracker(),
+		metrics:       NewMetrics(),
+		authLimiter:   NewRateLimiter(10, time.Minute),
+		fileHandler:   fileHandler,
+		uploadBaseDir: uploadDir,
 	}
 }
 
@@ -137,4 +149,14 @@ func (s *Server) clientIP(r *http.Request) string {
 
 func (s *Server) MetricsHandler() http.Handler {
 	return s.metrics
+}
+
+// HandleFileUpload delegates to the file upload handler
+func (s *Server) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
+	s.fileHandler.HandleUpload(w, r)
+}
+
+// HandleFileDownload delegates to the file download handler
+func (s *Server) HandleFileDownload(w http.ResponseWriter, r *http.Request) {
+	s.fileHandler.HandleDownload(w, r)
 }

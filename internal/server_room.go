@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"os"
 	"sync"
 	"time"
 
@@ -16,6 +17,8 @@ type Room struct {
 	unregister chan *Client
 	broadcast  chan []byte
 	mutex      sync.RWMutex
+	files      []UploadedFile
+	filesMutex sync.RWMutex
 }
 
 func newRoom(key string) *Room {
@@ -25,6 +28,7 @@ func newRoom(key string) *Room {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan []byte, 256),
+		files:      make([]UploadedFile, 0),
 	}
 }
 
@@ -202,4 +206,40 @@ func (client *Client) notifyRateLimit(now time.Time) {
 	case client.send <- payload:
 	default:
 	}
+}
+
+// addFile registers a newly uploaded file with the room
+func (room *Room) addFile(file UploadedFile) {
+	room.filesMutex.Lock()
+	defer room.filesMutex.Unlock()
+	room.files = append(room.files, file)
+}
+
+// getFile retrieves file metadata by ID
+func (room *Room) getFile(fileID string) *UploadedFile {
+	room.filesMutex.RLock()
+	defer room.filesMutex.RUnlock()
+	for i := range room.files {
+		if room.files[i].ID == fileID {
+			return &room.files[i]
+		}
+	}
+	return nil
+}
+
+// deleteAllFiles removes all uploaded files from the filesystem
+func (room *Room) deleteAllFiles(uploadBaseDir string) {
+	room.filesMutex.Lock()
+	defer room.filesMutex.Unlock()
+
+	if len(room.files) == 0 {
+		return
+	}
+
+	// Delete the entire room directory
+	roomDir := uploadBaseDir + "/" + room.key
+	_ = os.RemoveAll(roomDir)
+
+	// Clear files list
+	room.files = nil
 }

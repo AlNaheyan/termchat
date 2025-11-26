@@ -3,6 +3,8 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -44,6 +46,29 @@ type (
 	}
 	logoutResultMsg struct {
 		err error
+	}
+	fileBrowseMsg struct {
+		path  string
+		items []FileItem
+	}
+	fileBrowseErrorMsg struct {
+		err error
+	}
+	fileUploadedMsg struct {
+		fileID   string
+		filename string
+	}
+	fileUploadErrorMsg struct {
+		err      error
+		filename string
+	}
+	fileDownloadedMsg struct {
+		filename string
+		path     string
+	}
+	fileDownloadErrorMsg struct {
+		err      error
+		filename string
 	}
 )
 
@@ -191,6 +216,22 @@ func (model *TUIModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			model.appendSystemNotice(fmt.Sprintf("Logout error: %v", msg.err))
 		}
 		model.clearSessionState()
+		return model, nil
+
+	case fileUploadedMsg:
+		model.appendSystemNotice(fmt.Sprintf("✓ Uploaded: %s", msg.filename))
+		return model, nil
+
+	case fileUploadErrorMsg:
+		model.appendSystemNotice(fmt.Sprintf("✗ Upload failed: %v", msg.err))
+		return model, nil
+
+	case fileDownloadedMsg:
+		model.appendSystemNotice(fmt.Sprintf("✓ Downloaded: %s → %s", msg.filename, msg.path))
+		return model, nil
+
+	case fileDownloadErrorMsg:
+		model.appendSystemNotice(fmt.Sprintf("✗ Download failed: %v", msg.err))
 		return model, nil
 	}
 
@@ -434,12 +475,69 @@ func (model *TUIModel) handleChatKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEnter:
 		trimmed := strings.TrimSpace(model.textInput.Value())
 		if strings.HasPrefix(trimmed, "/") {
-			switch strings.ToLower(trimmed) {
+			parts := strings.Fields(trimmed)
+			if len(parts) == 0 {
+				return model, nil
+			}
+
+			command := strings.ToLower(parts[0])
+			switch command {
 			case "/leave":
 				model.leaveChat()
 				return model, nil
+
+			case "/upload":
+				if len(parts) < 2 {
+					model.appendSystemNotice("Usage: /upload <filepath>")
+					model.textInput.SetValue("")
+					return model, nil
+				}
+				filePath := strings.Join(parts[1:], " ")
+				// Expand ~ to home directory
+				if strings.HasPrefix(filePath, "~/") {
+					if home, err := os.UserHomeDir(); err == nil {
+						filePath = filepath.Join(home, filePath[2:])
+					}
+				}
+				// Check if file exists
+				if _, err := os.Stat(filePath); err != nil {
+					model.appendSystemNotice(fmt.Sprintf("File not found: %s", filePath))
+					model.textInput.SetValue("")
+					return model, nil
+				}
+				model.appendSystemNotice(fmt.Sprintf("Uploading %s...", filepath.Base(filePath)))
+				model.textInput.SetValue("")
+				return model, model.uploadFileCmd(filePath)
+
+			case "/download":
+				if len(parts) < 2 {
+					model.appendSystemNotice("Usage: /download <filename>")
+					model.textInput.SetValue("")
+					return model, nil
+				}
+				filename := strings.Join(parts[1:], " ")
+				// Find file in roomFiles
+				var fileToDownload *FileMetadata
+				for i := range model.roomFiles {
+					if model.roomFiles[i].Filename == filename {
+						fileToDownload = &model.roomFiles[i]
+						break
+					}
+				}
+				if fileToDownload == nil {
+					model.appendSystemNotice(fmt.Sprintf("File not found: %s", filename))
+					model.textInput.SetValue("")
+					return model, nil
+				}
+				model.appendSystemNotice(fmt.Sprintf("Downloading %s...", filename))
+				model.textInput.SetValue("")
+				return model, model.downloadFileCmd(fileToDownload.ID, filename)
+
+			default:
+				model.appendSystemNotice(fmt.Sprintf("Unknown command: %s", command))
+				model.textInput.SetValue("")
+				return model, nil
 			}
-			return model, nil
 		}
 		if trimmed != "" && model.isConnected {
 			chat := ChatMessage{Room: model.roomKey, User: model.username, Body: trimmed, Ts: time.Now().Unix()}

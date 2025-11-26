@@ -8,9 +8,11 @@ import (
 
 // ServerConfig defines how the HTTP/WebSocket backend should run.
 type ServerConfig struct {
-	Addr   string
-	Path   string
-	DBPath string
+	Addr        string
+	Path        string
+	DBPath      string
+	UploadDir   string // Base directory for file uploads (e.g., /data/uploads)
+	MaxFileSize int64  // Maximum file size in bytes (default: 10MB)
 }
 
 // ClientConfig defines the parameters the TUI client needs.
@@ -43,6 +45,29 @@ func DefaultDBPath() string {
 		return filepath.Join(home, ".local", "share", "termchat", "termchat.db")
 	}
 	return filepath.Join(".", ".termchat", "termchat.db")
+}
+
+// DefaultUploadDir returns a sensible default for file uploads
+// Uses /data/uploads for production (Fly.io), local directory for dev
+func DefaultUploadDir() string {
+	if env := os.Getenv("TERMCHAT_UPLOAD_DIR"); env != "" {
+		return env
+	}
+	// Check if /data is writable (production environment)
+	if _, err := os.Stat("/data"); err == nil {
+		// Try to create a test file to verify it's writable
+		testPath := "/data/.termchat-write-test"
+		if f, err := os.Create(testPath); err == nil {
+			f.Close()
+			os.Remove(testPath)
+			return "/data/uploads"
+		}
+	}
+	// Use local directory for development
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".termchat", "uploads")
+	}
+	return filepath.Join(".", ".termchat", "uploads")
 }
 
 // NormalizeJoinPath guarantees the websocket join path starts with '/' and

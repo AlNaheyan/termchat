@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -72,6 +74,30 @@ func (model *TUIModel) readOnceCmd() tea.Cmd {
 		if messageType != websocket.TextMessage {
 			return nil
 		}
+
+		// Try to parse as FileUploadMessage first
+		var fileMsg FileUploadMessage
+		if err := json.Unmarshal(payload, &fileMsg); err == nil && fileMsg.Type == "file_uploaded" {
+			// Add to room files list
+			model.roomFiles = append(model.roomFiles, FileMetadata{
+				ID:         fileMsg.FileID,
+				Filename:   fileMsg.Filename,
+				SizeBytes:  fileMsg.SizeBytes,
+				UploadedBy: fileMsg.UploadedBy,
+				UploadedAt: fileMsg.UploadedAt,
+			})
+			// Display as system message
+			sizeStr := formatFileSize(fileMsg.SizeBytes)
+			chat := ChatMessage{
+				Room: model.roomKey,
+				User: "system",
+				Body: fmt.Sprintf("📎 %s uploaded: %s (%s)", fileMsg.UploadedBy, fileMsg.Filename, sizeStr),
+				Ts:   fileMsg.UploadedAt,
+			}
+			return incomingMsg(chat)
+		}
+
+		// Try to parse as regular ChatMessage
 		var chat ChatMessage
 		if err := json.Unmarshal(payload, &chat); err == nil {
 			return incomingMsg(chat)
@@ -268,4 +294,68 @@ func directRoomKey(a, b string) string {
 		return fmt.Sprintf("chat:%s:%s", a, b)
 	}
 	return fmt.Sprintf("chat:%s:%s", b, a)
+}
+
+// browseFilesCmd initiates file browser
+func (model *TUIModel) browseFilesCmd() tea.Cmd {
+	return func() tea.Msg {
+		path := getDefaultBrowsePath()
+		items, err := browseDirectory(path)
+		if err != nil {
+			return fileBrowseErrorMsg{err: err}
+		}
+		return fileBrowseMsg{path: path, items: items}
+	}
+}
+
+// uploadFileCmd uploads selected file
+func (model *TUIModel) uploadFileCmd(filePath string) tea.Cmd {
+	return func() tea.Msg {
+		// Progress callback
+		progressFn := func(progress float64) {
+			// This would ideally send progress updates via channel
+			// For simplicity, we'll handle it in one shot
+		}
+
+		fileID, err := apiUploadFile(
+			model.apiBaseURL,
+			model.sessionToken,
+			filePath,
+			model.roomKey,
+			model.username,
+			progressFn,
+		)
+
+		if err != nil {
+			return fileUploadErrorMsg{err: err, filename: filePath}
+		}
+
+		return fileUploadedMsg{fileID: fileID, filename: filepath.Base(filePath)}
+	}
+}
+
+// downloadFileCmd downloads a file from the server
+func (model *TUIModel) downloadFileCmd(fileID, filename string) tea.Cmd {
+	return func() tea.Msg {
+		// Download to ~/Downloads
+		destDir := filepath.Join(os.Getenv("HOME"), "Downloads")
+		if _, err := os.Stat(destDir); os.IsNotExist(err) {
+			destDir = "."
+		}
+		destPath := filepath.Join(destDir, filename)
+
+		err := apiDownloadFile(
+			model.apiBaseURL,
+			model.sessionToken,
+			fileID,
+			model.roomKey,
+			destPath,
+		)
+
+		if err != nil {
+			return fileDownloadErrorMsg{err: err, filename: filename}
+		}
+
+		return fileDownloadedMsg{filename: filename, path: destPath}
+	}
 }

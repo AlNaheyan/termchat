@@ -1,23 +1,42 @@
-# Environment variables
-.env
-.env.*
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+termchat
+termchat-*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Local development files
+*.db
+*.db-shm
+*.db-wal
+.env.local
+.DS_Store
+
+# Local data directory
+data/
+.gocache/
+
+# Session files
+.termchat/
 
 # IDE
 .vscode/
-.DS_Store
+.idea/
+*.swp
+*.swo
+*~
 
-# Go build cache override
-.gocache/
-
-# go builds
-termchat
-
-# local sqlite db
-termchat.db
-
-# db
-data/
-
+# Build artifacts
 dist/
-
 

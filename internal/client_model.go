@@ -37,6 +37,16 @@ type TUIModel struct {
 	mode            appMode
 	pendingAction   actionType
 	loading         bool
+
+	// File upload state
+	uploadingFile    bool
+	uploadProgress   float64
+	uploadFilename   string
+	uploadError      string
+	roomFiles        []FileMetadata
+	fileBrowserPath  string
+	fileBrowserItems []FileItem
+	selectedFileIdx  int
 }
 
 type appMode int
@@ -51,6 +61,7 @@ const (
 	modeRequestsIncoming
 	modeRequestsOutgoing
 	modeChat
+	modeFileSelect
 )
 
 type actionType int
@@ -78,6 +89,23 @@ const (
 type Friend struct {
 	Username string
 	Online   bool
+}
+
+// FileMetadata represents a file uploaded to the current room
+type FileMetadata struct {
+	ID         string
+	Filename   string
+	SizeBytes  int64
+	UploadedBy string
+	UploadedAt int64
+}
+
+// FileItem represents an item in the file browser
+type FileItem struct {
+	Name  string
+	Path  string
+	IsDir bool
+	Size  int64
 }
 
 func NewTUIModel(serverJoinURL, roomKey, username string) *TUIModel {
