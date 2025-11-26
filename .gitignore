@@ -40,3 +40,6 @@ data/
 # Build artifacts
 dist/
 
+#Environment variables
+.env
+

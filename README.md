@@ -1,9 +1,122 @@
 # Termchat
-Want a lightweight chat app right inside your terminal? Termchat is a Bubble Tea–powered TUI that connects to a Go backend, authenticates with SQLite, and lets you trade real-time messages without leaving the command line.
 
-## Technology
-- **Go 1.24** for both server and client
-- **Bubble Tea + Bubbles + Lipgloss** for the terminal interface
-- **Gorilla WebSocket** for real-time chats
-- **SQLite (modernc driver)** for user accounts, sessions, and friend lists
-- **Fly.io / Docker** for deployment targets
+A lightweight, real-time terminal-based chat application built with Go and Bubble Tea.
+
+## ✨ Features
+
+- 🔐 **Secure Authentication** - User accounts with encrypted sessions
+- 👥 **Friend System** - Add friends and manage friend requests
+- 💬 **Real-time Chat** - WebSocket-powered instant messaging
+- 📎 **File Sharing** - Upload and download files in chat rooms
+- 🔒 **Privacy-First** - Ephemeral rooms and messages (deleted when empty)
+- 🎨 **Beautiful TUI** - Clean terminal interface with Bubble Tea
+
+## 🚀 Quick Install
+
+### One-Liner (macOS/Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AlNaheyan/termchat/main/install.sh | sh
+```
+
+### Manual Install
+
+**macOS:**
+```bash
+# Intel Mac
+curl -L https://github.com/AlNaheyan/termchat/releases/latest/download/termchat-macos-amd64 -o termchat
+
+# Apple Silicon Mac
+curl -L https://github.com/AlNaheyan/termchat/releases/latest/download/termchat-macos-arm64 -o termchat
+
+chmod +x termchat
+sudo mv termchat /usr/local/bin/
+```
+
+**Linux:**
+```bash
+curl -L https://github.com/AlNaheyan/termchat/releases/latest/download/termchat-linux-amd64 -o termchat
+chmod +x termchat
+sudo mv termchat /usr/local/bin/
+```
+
+**Windows:**
+Download [termchat-windows-amd64.exe](https://github.com/AlNaheyan/termchat/releases/latest) and add to PATH.
+
+## 💡 Usage
+
+### Start Chatting
+
+```bash
+# Join a room
+termchat myroom
+
+# Or create your own room name
+termchat secret-project-chat
+```
+
+### Commands
+
+**In Chat:**
+- `/upload <filepath>` - Upload a file
+- `/download <filename>` - Download a file
+- `/leave` - Exit the room
+
+**Example:**
+```bash
+> /upload ~/Documents/report.pdf
+Uploading report.pdf...
+✓ Uploaded: report.pdf
+📎 alice uploaded: report.pdf (2.4 MB)
+
+> /download report.pdf
+✓ Downloaded: report.pdf → /Users/you/Downloads/report.pdf
+```
+
+## 🛠️ Development
+
+### Prerequisites
+- Go 1.24+
+- Git
+
+### Build from Source
+
+```bash
+git clone https://github.com/AlNaheyan/termchat.git
+cd termchat
+
+# Run client
+go run cmd/client/main.go myroom
+
+# Run local server
+go run cmd/server/main.go
+
+# Build binary
+go build -o termchat cmd/client/main.go
+```
+
+### Run Tests
+
+```bash
+go test ./...
+```
+
+## 🏗️ Architecture
+
+- **Client**: Bubble Tea TUI with WebSocket client
+- **Server**: Go HTTP server with WebSocket support
+- **Database**: SQLite for users and friendships
+- **Storage**: Ephemeral file uploads (auto-deleted)
+- **Deployment**: Fly.io with persistent volumes
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details
+
+## 🤝 Contributing
+
+Contributions welcome! Please open an issue or PR.
+
+---
+
+**Built with ❤️ using [Bubble Tea](https://github.com/charmbracelet/bubbletea)**

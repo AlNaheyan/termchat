@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          
+          # macOS Intel
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/termchat-macos-amd64 ./cmd/client/main.go
+          
+          # macOS Apple Silicon
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/termchat-macos-arm64 ./cmd/client/main.go
+          
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/termchat-linux-amd64 ./cmd/client/main.go
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/termchat-linux-arm64 ./cmd/client/main.go
+          
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/termchat-windows-amd64.exe ./cmd/client/main.go
+      
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/termchat-macos-amd64
+            dist/termchat-macos-arm64
+            dist/termchat-linux-amd64
+            dist/termchat-linux-arm64
+            dist/termchat-windows-amd64.exe
+            dist/checksums.txt
+          body: |
+            ## Installation
+            
+            ### macOS
+            ```bash
+            # Intel Mac
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/termchat-macos-amd64 -o termchat
+            
+            # Apple Silicon Mac
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/termchat-macos-arm64 -o termchat
+            
+            chmod +x termchat
+            sudo mv termchat /usr/local/bin/
+            ```
+            
+            ### Linux
+            ```bash
+            # AMD64
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/termchat-linux-amd64 -o termchat
+            
+            chmod +x termchat
+            sudo mv termchat /usr/local/bin/
+            ```
+            
+            ### Windows
+            Download `termchat-windows-amd64.exe`, rename to `termchat.exe`, and add to PATH.
+            
+            ## Usage
+            ```bash
+            termchat myroom
+            ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
