@@ -303,6 +303,13 @@ func (model *TUIModel) handleAuthUsernameKeys(msg tea.KeyMsg) (tea.Model, tea.Cm
 			model.appendSystemNotice("Username cannot be empty.")
 			return model, nil
 		}
+		
+		// Validate username
+		if err := validateUsername(trimmed); err != nil {
+			model.appendSystemNotice(err.Error())
+			return model, nil
+		}
+		
 		model.pendingUsername = trimmed
 		model.mode = modeAuthPassword
 		model.textInput.SetValue("")
@@ -698,4 +705,25 @@ func (model *TUIModel) handleRequestListKeys(msg tea.KeyMsg, view requestViewTyp
 		return model, model.friendRequestActionCmd(list[model.selectedRequest], "cancel")
 	}
 	return model, nil
+}
+
+// validateUsername checks if username meets requirements:
+// - Minimum 4 characters
+// - Only alphanumeric characters (letters and numbers)
+// - No special characters, emojis, or spaces
+func validateUsername(username string) error {
+	if len(username) < 4 {
+		return fmt.Errorf("Username must be at least 4 characters long.")
+	}
+	
+	// Check if username contains only alphanumeric characters
+	for _, char := range username {
+		if !((char >= 'a' && char <= 'z') || 
+		     (char >= 'A' && char <= 'Z') || 
+		     (char >= '0' && char <= '9')) {
+			return fmt.Errorf("Username can only contain letters and numbers.")
+		}
+	}
+	
+	return nil
 }
