@@ -59,6 +59,8 @@ func (model TUIModel) View() string {
 		return model.renderRequestsView(requestViewIncoming)
 	case modeRequestsOutgoing:
 		return model.renderRequestsView(requestViewOutgoing)
+	case modeFileSelect:
+		return model.renderFileSelectView()
 	default:
 		return model.renderChatView()
 	}
@@ -305,4 +307,20 @@ func colorForUser(name string) lipgloss.Color {
 		sum += int(r)
 	}
 	return userColorPalette[sum%len(userColorPalette)]
+}
+
+func (model TUIModel) renderFileSelectView() string {
+	header := appTitleStyle.Render("Select a file to upload")
+	hint := menuHintStyle.Render("↑/↓ navigate • Enter select file • Esc cancel")
+	
+	viewSections := []string{header, hint}
+	
+	if notices := model.renderSystemNotices(); notices != "" {
+		viewSections = append(viewSections, notices)
+	}
+	
+	// Render the filepicker
+	viewSections = append(viewSections, "\n"+model.filePicker.View())
+	
+	return lipgloss.JoinVertical(lipgloss.Left, viewSections...)
 }

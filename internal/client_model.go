@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gorilla/websocket"
@@ -39,14 +40,12 @@ type TUIModel struct {
 	loading         bool
 
 	// File upload state
-	uploadingFile    bool
-	uploadProgress   float64
-	uploadFilename   string
-	uploadError      string
-	roomFiles        []FileMetadata
-	fileBrowserPath  string
-	fileBrowserItems []FileItem
-	selectedFileIdx  int
+	uploadingFile  bool
+	uploadProgress float64
+	uploadFilename string
+	uploadError    string
+	roomFiles      []FileMetadata
+	filePicker     filepicker.Model
 }
 
 type appMode int
@@ -124,6 +123,21 @@ func NewTUIModel(serverJoinURL, roomKey, username string) *TUIModel {
 		apiBase = ""
 	}
 
+	// Initialize filepicker
+	fp := filepicker.New()
+	fp.AllowedTypes = []string{} // Allow all file types
+	fp.FileAllowed = true
+	fp.DirAllowed = false
+	fp.ShowHidden = false
+	fp.AutoHeight = false
+	fp.Height = 15
+
+	// Set starting directory to user's home directory
+	if home, err := os.UserHomeDir(); err == nil {
+		fp.CurrentDirectory = home
+	}
+
+
 	model := &TUIModel{
 		textInput:     input,
 		messages:      make([]ChatMessage, 0, 64),
@@ -132,6 +146,7 @@ func NewTUIModel(serverJoinURL, roomKey, username string) *TUIModel {
 		sessionPath:   defaultSessionPath(),
 		roomKey:       roomKey,
 		username:      username,
+		filePicker:    fp,
 	}
 
 	if session, err := loadSessionFromDisk(model.sessionPath); err == nil {

@@ -235,6 +235,13 @@ func (model *TUIModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return model, nil
 	}
 
+	// Handle filepicker updates when in file select mode
+	if model.mode == modeFileSelect {
+		var cmd tea.Cmd
+		model.filePicker, cmd = model.filePicker.Update(message)
+		return model, cmd
+	}
+
 	return model, nil
 }
 
@@ -258,6 +265,8 @@ func (model *TUIModel) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return model.handleRequestListKeys(msg, requestViewOutgoing)
 	case modeChat:
 		return model.handleChatKeys(msg)
+	case modeFileSelect:
+		return model.handleFileSelectKeys(msg)
 	default:
 		return model, nil
 	}
@@ -488,9 +497,11 @@ func (model *TUIModel) handleChatKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			case "/upload":
 				if len(parts) < 2 {
-					model.appendSystemNotice("Usage: /upload <filepath>")
+					// No file path provided, open file picker
+					model.mode = modeFileSelect
+					model.textInput.Blur()
 					model.textInput.SetValue("")
-					return model, nil
+					return model, model.filePicker.Init()
 				}
 				filePath := strings.Join(parts[1:], " ")
 				// Expand ~ to home directory
@@ -549,6 +560,35 @@ func (model *TUIModel) handleChatKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	model.textInput, cmd = model.textInput.Update(msg)
+	return model, cmd
+}
+
+func (model *TUIModel) handleFileSelectKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		// Cancel file selection, return to chat
+		model.mode = modeChat
+		model.textInput.Focus()
+		return model, nil
+	}
+	// Pass all other keys to the filepicker for navigation
+	var cmd tea.Cmd
+	model.filePicker, cmd = model.filePicker.Update(msg)
+	
+	// Check if user selected a file
+	if didSelect, path := model.filePicker.DidSelectFile(msg); didSelect {
+		// User selected a file, upload it
+		model.mode = modeChat
+		model.textInput.Focus()
+		model.appendSystemNotice(fmt.Sprintf("Uploading %s...", filepath.Base(path)))
+		return model, model.uploadFileCmd(path)
+	}
+	
+	// Check if user tried to select a disabled file (directory)
+	if didSelect, path := model.filePicker.DidSelectDisabledFile(msg); didSelect {
+		model.appendSystemNotice(fmt.Sprintf("Cannot select directory: %s", filepath.Base(path)))
+	}
+	
 	return model, cmd
 }
 

@@ -296,15 +296,23 @@ func directRoomKey(a, b string) string {
 	return fmt.Sprintf("chat:%s:%s", b, a)
 }
 
-// browseFilesCmd initiates file browser
-func (model *TUIModel) browseFilesCmd() tea.Cmd {
-	return func() tea.Msg {
-		path := getDefaultBrowsePath()
-		items, err := browseDirectory(path)
-		if err != nil {
-			return fileBrowseErrorMsg{err: err}
-		}
-		return fileBrowseMsg{path: path, items: items}
+// formatFileSize returns a human-readable file size
+func formatFileSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
 	}
 }
 
