@@ -304,10 +304,13 @@ func (model *TUIModel) handleAuthUsernameKeys(msg tea.KeyMsg) (tea.Model, tea.Cm
 			return model, nil
 		}
 		
-		// Validate username
-		if err := validateUsername(trimmed); err != nil {
-			model.appendSystemNotice(err.Error())
-			return model, nil
+		// Only validate username format for signup, not login
+		// (existing users may have usernames that don't meet new requirements)
+		if model.authIntent == authIntentSignup {
+			if err := validateUsername(trimmed); err != nil {
+				model.appendSystemNotice(err.Error())
+				return model, nil
+			}
 		}
 		
 		model.pendingUsername = trimmed
