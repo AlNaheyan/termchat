@@ -202,7 +202,6 @@ func (model TUIModel) renderChatView() string {
 		headerSegments = append(headerSegments, fmt.Sprintf("Room %s", model.roomKey))
 	}
 	headerSegments = append(headerSegments, fmt.Sprintf("User %s", model.username))
-	headerSegments = append(headerSegments, fmt.Sprintf("Server %s", model.serverJoinURL))
 	header := chatHeaderStyle.Render(strings.Join(headerSegments, dividerStyle))
 
 	var statusLine string
