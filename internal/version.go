@@ -11,7 +11,7 @@ import (
 
 // Version is the current version of termchat
 // This should be updated with each release
-const Version = "1.2.0"
+const Version = "1.3.1"
 
 const (
 	GitHubOwner = "AlNaheyan"
