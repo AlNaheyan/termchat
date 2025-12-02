@@ -28,6 +28,10 @@ type TUIModel struct {
 	outgoingReqs    []string
 	selectedFriend  int
 	selectedRequest int
+	// Version checking
+	latestVersion     string
+	updateAvailable   bool
+	versionCheckDone  bool
 	requestView     requestViewType
 	pendingUsername string
 	authIntent      authIntent
@@ -183,14 +187,17 @@ func defaultUsername() string {
 }
 
 func (model *TUIModel) Init() tea.Cmd {
+	// Always check for updates on startup (non-blocking)
+	cmds := []tea.Cmd{checkVersionCmd()}
+	
 	switch model.mode {
 	case modeChat:
-		return model.connectCmd()
+		cmds = append(cmds, model.connectCmd())
 	case modeFriends:
-		return tea.Batch(model.fetchFriendsCmd(), model.fetchFriendRequestsCmd())
-	default:
-		return nil
+		cmds = append(cmds, model.fetchFriendsCmd(), model.fetchFriendRequestsCmd())
 	}
+	
+	return tea.Batch(cmds...)
 }
 
 func defaultSessionPath() string {

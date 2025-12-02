@@ -16,6 +16,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type versionCheckMsg struct {
+	available bool
+	latest    string
+	err       error
+}
+
 func (model *TUIModel) scheduleReconnect() tea.Cmd {
 	const retryDelay = 2 * time.Second
 	// we schedule a future poke that nudges Update to try the connection again.
@@ -365,5 +371,17 @@ func (model *TUIModel) downloadFileCmd(fileID, filename string) tea.Cmd {
 		}
 
 		return fileDownloadedMsg{filename: filename, path: destPath}
+	}
+}
+
+// checkVersionCmd checks for updates in the background
+func checkVersionCmd() tea.Cmd {
+	return func() tea.Msg {
+		available, latest, err := CheckForUpdate()
+		return versionCheckMsg{
+			available: available,
+			latest:    latest,
+			err:       err,
+		}
 	}
 }

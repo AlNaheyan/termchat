@@ -233,6 +233,19 @@ func (model *TUIModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case fileDownloadErrorMsg:
 		model.appendSystemNotice(fmt.Sprintf("✗ Download failed: %v", msg.err))
 		return model, nil
+	
+	case versionCheckMsg:
+		model.versionCheckDone = true
+		if msg.err != nil {
+			// Silently fail - don't notify user about check failures
+			return model, nil
+		}
+		model.latestVersion = msg.latest
+		model.updateAvailable = msg.available
+		if msg.available {
+			model.appendSystemNotice(fmt.Sprintf("🚀 Update available! v%s → v%s - Run: termchat --update", Version, msg.latest))
+		}
+		return model, nil
 	}
 
 	// Handle filepicker updates when in file select mode
